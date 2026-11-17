@@ -1,0 +1,33 @@
+[package]
+name = "hdoc-decoder"
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+rust-version = "1.80"
+description = "Read HyperDoc (HDOC) files with indexed page access and text search"
+repository = "https://github.com/younsabood/hdoc-decoder"
+readme = "README.md"
+keywords = ["hyperdoc", "document", "zstd", "decoder"]
+categories = ["encoding", "parser-implementations"]
+include = [
+    "Cargo.toml",
+    "README.md",
+    "LICENSE",
+    "LICENSE-MIT",
+    "LICENSE-APACHE",
+    "CONTRIBUTING.md",
+    "CODE_OF_CONDUCT.md",
+    "SECURITY.md",
+    "src/**",
+    "examples/**",
+    "docs/**",
+]
+
+[dependencies]
+base64 = "0.22"
+blake3 = "1.8"
+crc32fast = "1.5"
+lru = "0.16"
+memmap2 = "0.9"
+thiserror = "2.0"
+zstd = "0.14"

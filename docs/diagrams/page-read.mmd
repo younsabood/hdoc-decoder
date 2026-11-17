@@ -1,0 +1,11 @@
+flowchart TB
+    Request["Request page ID"] --> Directory["Page directory lookup"]
+    Directory --> Cache{"Chunk cached?"}
+    Cache -- Yes --> Opcodes["Decode page slice"]
+    Cache -- No --> Range["Read compressed byte range"]
+    Range --> Limit["Enforce decompression bounds"]
+    Limit --> Decompress["Zstandard decompress"]
+    Decompress --> Store["Insert chunk into LRU"]
+    Store --> Opcodes
+    Opcodes --> Materialize["Resolve SVG / asset references"]
+    Materialize --> Return["Return PageDisplayList"]

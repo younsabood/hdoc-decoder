@@ -1,0 +1,33 @@
+name: Bug report
+description: Report a reproducible issue while opening or reading an HDOC file.
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happened?
+      description: Describe the unexpected output or error.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: How can we reproduce it?
+      description: Include a minimal Rust example or a redistributable HDOC file.
+      render: text
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Crate version or commit
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Include Rust version, operating system, and data source type.
+    validations:
+      required: true

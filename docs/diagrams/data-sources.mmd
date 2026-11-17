@@ -1,0 +1,11 @@
+flowchart LR
+    Caller["Application"] --> Source{"Byte source"}
+    Source --> Mmap["MmapSource<br/>borrowed file ranges"]
+    Source --> Memory["MemorySource<br/>Arc byte buffer"]
+    Source --> Custom["Custom ByteSource<br/>application-defined reads"]
+    Mmap --> Reader["HdocDocument"]
+    Memory --> Reader
+    Custom --> Reader
+    Reader --> Page["Display list"]
+    Reader --> Asset["Asset bytes"]
+    Reader --> Search["Text search"]

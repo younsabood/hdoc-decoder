@@ -1,0 +1,12 @@
+flowchart LR
+    Source["ByteSource"] --> Open["Header + footer index"]
+    Open --> Validate["Validate ranges, counts, and flags"]
+    Validate --> Document["HdocDocument"]
+    Document --> Page["page(page_id)"]
+    Page --> Cache{"LRU cache"}
+    Cache -- Hit --> Decode["Decode page opcodes"]
+    Cache -- Miss --> Read["Read compressed chunk range"]
+    Read --> Zstd["Bounded Zstandard decode"]
+    Zstd --> Cache
+    Decode --> Result["PageDisplayList"]
+    Document --> Text["page_text / search"]
