@@ -24,6 +24,31 @@ pub struct FileHeader {
 }
 
 impl FileHeader {
+    pub fn new(page_count: u32, asset_count: u32, footer_offset: u64, footer_size: u32) -> Self {
+        Self {
+            version: FORMAT_VERSION,
+            flags: FLAG_HAS_SEARCH_INDEX,
+            page_count,
+            asset_count,
+            footer_offset,
+            footer_size,
+        }
+    }
+
+    pub fn encode(self) -> [u8; HEADER_SIZE] {
+        let mut output = [0u8; HEADER_SIZE];
+        output[0..4].copy_from_slice(&FILE_MAGIC);
+        output[4..6].copy_from_slice(&self.version.to_le_bytes());
+        output[6..8].copy_from_slice(&self.flags.to_le_bytes());
+        output[8..12].copy_from_slice(&self.page_count.to_le_bytes());
+        output[12..16].copy_from_slice(&self.asset_count.to_le_bytes());
+        output[16..24].copy_from_slice(&self.footer_offset.to_le_bytes());
+        output[24..28].copy_from_slice(&self.footer_size.to_le_bytes());
+        let checksum = crc32fast::hash(&output[..28]);
+        output[28..32].copy_from_slice(&checksum.to_le_bytes());
+        output
+    }
+
     pub fn decode(input: &[u8]) -> Result<Self, HdocError> {
         if input.len() < HEADER_SIZE {
             return Err(HdocError::Truncated);
@@ -99,6 +124,49 @@ pub struct CentralIndex {
 }
 
 impl CentralIndex {
+    pub fn encode(&self) -> Result<Vec<u8>, HdocError> {
+        let mut out = Vec::new();
+        out.extend_from_slice(&INDEX_MAGIC);
+        put_u16(&mut out, FORMAT_VERSION);
+        put_u16(&mut out, 0);
+        put_count(&mut out, self.assets.len())?;
+        put_count(&mut out, self.chunks.len())?;
+        put_count(&mut out, self.pages.len())?;
+        put_count(&mut out, self.metadata.len())?;
+        put_u64(&mut out, self.search_block.offset);
+        put_u32(&mut out, self.search_block.compressed_size);
+        put_u32(&mut out, self.search_block.uncompressed_size);
+
+        for (key, value) in &self.metadata {
+            put_string(&mut out, key)?;
+            put_string(&mut out, value)?;
+        }
+        for asset in &self.assets {
+            put_u32(&mut out, asset.id);
+            put_u64(&mut out, asset.offset);
+            put_u64(&mut out, asset.length);
+            put_string(&mut out, &asset.media_type)?;
+            put_u32(&mut out, asset.width);
+            put_u32(&mut out, asset.height);
+            out.extend_from_slice(&asset.hash);
+        }
+        for chunk in &self.chunks {
+            put_u64(&mut out, chunk.offset);
+            put_u32(&mut out, chunk.compressed_size);
+            put_u32(&mut out, chunk.uncompressed_size);
+            put_u32(&mut out, chunk.first_page);
+            put_u32(&mut out, chunk.page_count);
+        }
+        for page in &self.pages {
+            put_u32(&mut out, page.chunk_id);
+            put_u32(&mut out, page.offset_in_chunk);
+            put_u16(&mut out, page.width);
+            put_u16(&mut out, page.height);
+            put_u32(&mut out, page.flags);
+        }
+        Ok(out)
+    }
+
     pub fn decode(input: &[u8]) -> Result<Self, HdocError> {
         let mut cursor = Cursor::new(input);
         if cursor.take(4)? != INDEX_MAGIC {
@@ -181,6 +249,31 @@ impl CentralIndex {
     }
 }
 
+fn put_count(output: &mut Vec<u8>, count: usize) -> Result<(), HdocError> {
+    let count = u32::try_from(count).map_err(|_| HdocError::LimitExceeded)?;
+    put_u32(output, count);
+    Ok(())
+}
+
+fn put_string(output: &mut Vec<u8>, value: &str) -> Result<(), HdocError> {
+    let len = u16::try_from(value.len()).map_err(|_| HdocError::LimitExceeded)?;
+    put_u16(output, len);
+    output.extend_from_slice(value.as_bytes());
+    Ok(())
+}
+
+fn put_u16(output: &mut Vec<u8>, value: u16) {
+    output.extend_from_slice(&value.to_le_bytes());
+}
+
+fn put_u32(output: &mut Vec<u8>, value: u32) {
+    output.extend_from_slice(&value.to_le_bytes());
+}
+
+fn put_u64(output: &mut Vec<u8>, value: u64) {
+    output.extend_from_slice(&value.to_le_bytes());
+}
+
 fn validate_count(count: usize, remaining: usize, minimum_size: usize) -> Result<(), HdocError> {
     let required = count
         .checked_mul(minimum_size)
@@ -195,13 +288,16 @@ struct Cursor<'a> {
     input: &'a [u8],
     position: usize,
 }
+
 impl<'a> Cursor<'a> {
     fn new(input: &'a [u8]) -> Self {
         Self { input, position: 0 }
     }
+
     fn remaining(&self) -> usize {
         self.input.len().saturating_sub(self.position)
     }
+
     fn take(&mut self, length: usize) -> Result<&'a [u8], HdocError> {
         let end = self
             .position
@@ -214,21 +310,25 @@ impl<'a> Cursor<'a> {
         self.position = end;
         Ok(slice)
     }
+
     fn u16(&mut self) -> Result<u16, HdocError> {
         Ok(u16::from_le_bytes(
             self.take(2)?.try_into().expect("fixed integer slice"),
         ))
     }
+
     fn u32(&mut self) -> Result<u32, HdocError> {
         Ok(u32::from_le_bytes(
             self.take(4)?.try_into().expect("fixed integer slice"),
         ))
     }
+
     fn u64(&mut self) -> Result<u64, HdocError> {
         Ok(u64::from_le_bytes(
             self.take(8)?.try_into().expect("fixed integer slice"),
         ))
     }
+
     fn string(&mut self) -> Result<String, HdocError> {
         let length = self.u16()? as usize;
         String::from_utf8(self.take(length)?.to_vec()).map_err(|_| HdocError::InvalidUtf8)

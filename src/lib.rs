@@ -1,6 +1,6 @@
-//! Standalone HyperDoc reader with memory-mapped and in-memory byte sources.
-//! The format implementation is local to this crate; it does not depend on
-//! `hdoc-encoder`.
+//! Standalone HyperDoc reader with memory-mapped, safe positional-file, and
+//! in-memory byte sources. The format implementation is local to this crate;
+//! it does not depend on `hdoc-encoder`.
 
 mod cache;
 mod error;
@@ -15,6 +15,6 @@ pub mod varint;
 
 pub use error::{DecoderError, HdocError};
 pub use opcodes::{GlyphOffset, PageCommand, PageDisplayList, SvgGlyphStyle, SvgGlyphUse};
-pub use reader::{HdocDocument, SearchResult};
+pub use reader::{HdocDocument, RankedSearchResult, SearchResult};
 pub use search::SearchBlock;
-pub use source::{ByteSource, MemorySource, MmapSource};
+pub use source::{ByteSource, FileSource, MemorySource, MmapSource};

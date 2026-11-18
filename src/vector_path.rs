@@ -1,8 +1,11 @@
+use std::fmt::Write as _;
+
 use crate::{varint, HdocError};
 
 const PATH_MAGIC: &[u8; 4] = b"HPTH";
 const PATH_VERSION: u8 = 1;
 const MAX_PATH_SEGMENTS: usize = 1_000_000;
+const MAX_DECODED_PATH_BYTES: usize = 8 * 1024 * 1024;
 
 pub(crate) fn decode_path_asset(
     input: &[u8],
@@ -39,7 +42,7 @@ pub(crate) fn decode_path_asset(
     if segment_count > MAX_PATH_SEGMENTS || segment_count > input.len().saturating_sub(cursor) {
         return Err(HdocError::LimitExceeded);
     }
-    let mut output = String::new();
+    let mut output = String::with_capacity(segment_count.saturating_mul(10).min(65_536));
     for _ in 0..segment_count {
         let command = take(input, &mut cursor, 1)?[0];
         if !output.is_empty() {
@@ -82,6 +85,7 @@ pub(crate) fn decode_path_asset(
                 output.push(if flags & 1 == 0 { '0' } else { '1' });
                 output.push(' ');
                 output.push(if flags & 2 == 0 { '0' } else { '1' });
+                output.push(' ');
                 append_pair(input, &mut cursor, &mut output)?;
             }
             b'Z' => {}
@@ -90,6 +94,9 @@ pub(crate) fn decode_path_asset(
                     "unknown vector path command".into(),
                 ));
             }
+        }
+        if output.len() > MAX_DECODED_PATH_BYTES {
+            return Err(HdocError::LimitExceeded);
         }
     }
     if cursor != input.len() {
@@ -107,8 +114,13 @@ fn append_pair(input: &[u8], cursor: &mut usize, out: &mut String) -> Result<(),
 }
 
 fn append_coord(input: &[u8], cursor: &mut usize, out: &mut String) -> Result<(), HdocError> {
-    let value = varint::read_i32(input, cursor)? as f64 / 64.0;
-    out.push_str(&value.to_string());
+    let raw = varint::read_i32(input, cursor)?;
+    if raw % 64 == 0 {
+        let _ = write!(out, "{}", raw / 64);
+    } else {
+        let value = f64::from(raw) / 64.0;
+        let _ = write!(out, "{value}");
+    }
     Ok(())
 }
 
@@ -146,9 +158,9 @@ mod tests {
     }
 
     #[test]
-    fn curve_control_points_are_separated_in_svg_output() {
+    fn curve_control_points_and_arcs_are_separated_in_svg_output() {
         let mut bytes = b"HPTH\x01".to_vec();
-        varint::write_u32(2, &mut bytes);
+        varint::write_u32(3, &mut bytes);
         bytes.push(b'M');
         varint::write_i32(0, &mut bytes);
         varint::write_i32(0, &mut bytes);
@@ -156,10 +168,17 @@ mod tests {
         for value in [64, 128, 192, 256] {
             varint::write_i32(value, &mut bytes);
         }
+        bytes.push(b'a');
+        for value in [320, 320, 0] {
+            varint::write_i32(value, &mut bytes);
+        }
+        bytes.push(0b10);
+        varint::write_i32(64, &mut bytes);
+        varint::write_i32(128, &mut bytes);
 
         assert_eq!(
             decode_path_asset(&bytes, false, None).unwrap(),
-            "M0 0 Q1 2 3 4"
+            "M0 0 Q1 2 3 4 a5 5 0 0 1 1 2"
         );
     }
 
